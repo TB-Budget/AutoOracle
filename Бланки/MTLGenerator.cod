@@ -1,0 +1,230 @@
+﻿class "Генератор MTL для подключения БД";
+
+inclass
+
+inobject
+var ИмяКлюч[]:String; --поля, определяемые ключевыми по имени
+
+var ТаблИмя[]:String; --имя таблицы
+var ТаблФизИмя[]:String; --имя таблицы
+var КлючПоле[]:String; --Имя ключевого поля
+
+var ЕстьПоля[]:Logical = Min(ТипТ9[$]) > 0;
+var Готов[]:Logical = ЕстьПоля[$] and КлючПоле[$] <> '';
+
+var ИД[2]:Numeric;
+var Имя[2]:String;
+var КваИмя[2]:String;
+var ТипП[2]:String;
+var ТипТ9[2]:Integer;
+var Точн[2]:Numeric;
+var Длин[2]:Numeric;
+var ДлинС[2]:Numeric;
+
+var secTables: TemplateSection;
+var secKeys: TemplateSection;
+
+func GetMTLType(TblN:Integer; i:Integer):String;
+  if ТипТ9[TblN, i] = varNumeric then
+     return "Numeric";
+  elsif ТипТ9[TblN, i] = varString then
+     return "String";
+  elsif ТипТ9[TblN, i] = varDate then
+     return "Date";
+  end;
+end;
+
+func GetMTLRows(TblN:Integer): String[];
+  var ind:Integer;
+  var i:Integer;
+  ind = SearchInArray(Имя[TblN], КлючПоле[TblN]);
+  Result[1] = "Record " + ТаблИмя[TblN] + "=" + '"'+ТаблФизИмя[TblN]+'"';
+  Result[1] = Result[1] + "(" + КлючПоле[TblN] + ":"+ GetMTLType(TblN, ind) +");";
+  for i = 1..LengthOfArray(Имя[TblN]) do
+    if Имя[TblN, i] <> КлючПоле[TblN] then --Пропускаем первичный ключ
+      Сис2.Функции.AddInArray(Result, "  Field " + Имя[TblN, i] + ":" + GetMTLType(TblN, i)+";");
+    end;
+  end;
+  Сис2.Функции.AddInArray(Result, "End;");
+end;
+
+func GetTableFields(TblN: Integer):Logical;
+  var Q: Query;
+  var i:Integer;
+  Q = Query.Create([Metadata.ALL_TAB_COLS]);
+  Q.Filter = 'TABLE_NAME = "' + ТаблФизИмя[TblN] + '"';
+  Q.Select;
+  for I = 1..Q.Count do
+
+    ИД[TblN, i] = Q.Current.COLUMN_ID;
+    Имя[TblN, i] = Q.Current.COLUMN_NAME;
+    КваИмя[TblN, i] = Q.Current.QUALIFIED_COL_NAME;
+    ТипП[TblN, i] = Q.Current.DATA_TYPE;
+    Точн[TblN, i] = Q.Current.DATA_PRECISION;
+    Длин[TblN, i] = Q.Current.DATA_LENGTH;
+    ДлинС[TblN, i] = Q.Current.CHAR_LENGTH;
+    -- Определение типа
+    if ТипП[TblN, i] = "VARCHAR2" or ТипП[TblN, i] = "CHAR" then
+      ТипТ9[TblN, i] = varString;
+    elsif ТипП[TblN, i] = "NUMBER" then
+      ТипТ9[TblN, i] = varNumeric;
+      -- TODO: Integer в зависимости от Precision??
+    elsif ТипП[TblN, i] = "DATE" then
+      ТипТ9[TblN, i] = varDate;
+    else
+      ТипТ9[TblN, i] = 0;
+    end;
+    Q.Next;
+  end;
+  
+  Result = True;
+end;
+--------------------------------------------------------------------------------
+--{ Обработчики событий бланка
+
+  proc btnParseMTLOnClick(Sender :Button);
+    var MTLFilePath: String;
+    var MTLFile: TextFile;
+    var OneLine:String;
+    var i, n, n2: Integer;
+    i = 0;
+    if ChooseFile(MTLFilePath, "Выбор изначального файла MTL", "MTL файл|*.mtl") = cmOk:
+      MTLFile = TextFile.Create(MTLFilePath, fmOpenRead);
+      while not MTLFile.EOF do
+        OneLine = Trim(MTLFile.ReadLn);
+        if Substr(OneLine, 1, 6) = "Record" then
+          i = i + 1;
+          n = CharPos('=',OneLine);
+          --Record ACATALOG_COMPANY ="ACATALOG_COMPANY"(<IDFieldName>:<IDFieldType>);
+          ТаблИмя[i] = Trim(Substr(OneLine, 7, n - 7));
+          n = CharPos('"',OneLine, n);
+          n2 = CharPos('"',OneLine, n+1);
+          ТаблФизИмя[i] = Substr(OneLine, n+1, n2 - n - 1);
+        end;
+      end;
+      secTables.Count = i;
+    fi;
+  end;
+
+  proc btnReadColsOnClick(Sender :Button);
+    var i: Integer;
+    for i = 1..secTables.Count do
+      Hint(Str(i) + " / " + Str(secTables.Count));
+      GetTableFields(i);
+    end;
+
+      
+  end;
+
+  proc btnFindKeyOnClick(Sender :Button);
+    var i, j: Integer;
+    for i = 1..secTables.Count do
+      Hint(Str(i) + " / " + Str(secTables.Count));
+      for j = 1..secKeys.Count do
+        if SearchInArray(Имя[i], ИмяКлюч[j]) > 0 then
+           КлючПоле[i] = ИмяКлюч[j];
+           Break;
+        end;
+      end;
+    end;
+  end;
+
+  proc btnWriteMTLOnClick(Sender :Button);
+    var MTLFilePath: String;
+    var MTLFile: TextFile;
+    var OneLine:String[];
+    var i, n: Integer;
+
+    i = 0;
+    if ChooseFile(MTLFilePath, "Сохраните сгенерированный MTL", "MTL файл|*.mtl") = cmOk:
+      MTLFile = TextFile.Create(MTLFilePath, fmCreate);
+      for i = 1..LengthOfArray(ТаблИмя) do
+        if Готов[i] then
+          OneLine = GetMTLRows(i);
+          for n = 1..LengthOfArray(OneLine) do
+            MTLFile.WriteLn(OneLine[n]);
+          end;
+          MTLFile.WriteLn('');
+          
+        end;
+      end;
+    fi;
+      
+  end;
+
+  proc BlankOnOpen(Create :Logical);
+    -- Вызывается при открытия окна формы
+    --   Create: True - форма открывается, False - форма восстанавливается при запуске сессии
+    if secKeys.Count < 1 then
+      secKeys.Count = 1;
+    end;
+
+  end;
+
+  func CellsOnEnter(Cell :TemplateCell; Index :Integer; Action :Template.EnterTypes) :Logical;
+    -- Параметры:
+    --   Cell: клетка шаблона
+    --   Index: номер кадра, в котором находится клетка
+    --   Action: тип входа (Вход,Вставка,Очистка)
+    var SubEditor: TableFields;
+    SubEditor = TableFields.Create;
+    SubEditor.ТаблИмя = ТаблИмя[Index];
+    SubEditor.ТаблФизИмя = ТаблФизИмя[Index];
+    SubEditor.КлючПоле = КлючПоле[Index];
+    SubEditor.ИД = ИД[Index];
+    SubEditor.Имя = Имя[Index];
+    SubEditor.КваИмя = КваИмя[Index];
+    SubEditor.ТипП = ТипП[Index];
+    SubEditor.ТипТ9 = ТипТ9[Index];
+    SubEditor.Точн = Точн[Index];
+    SubEditor.Длин = Длин[Index];
+    SubEditor.ДлинС = ДлинС[Index];
+
+    SubEditor.ShowEx(, Window.ModalWindow);
+    КлючПоле[Index] = SubEditor.КлючПоле;
+    Result = False; -- Разрешаем войти в поле
+  end;
+
+  func CellOnClick(Cell :TemplateCell; Action :Template.ClickTypes) :Logical;
+    -- Обработка события нажатия в зависимости от типа
+    -- Параметры:
+    --   Cell: клетка шаблона
+    --   Action: тип нажатия (SingleClick, DoubleClick, EnterPressed, ButtonPressed)
+    var i:Integer;
+    var subvar: Variant[];
+      for i = 1..LengthOfArray(ТаблИмя) do
+        subvar[i] = ЕстьПоля[i];
+      end;
+
+      i = SearchInArray(subvar, False);
+      if i > 0 then
+        Template.CurrentCell = Template.CellByField['ЕстьПоля'];
+        Template.CurrentSection = secTables;
+        Template.Frame = i;
+      end;
+    Result = True; -- Разрешаем стандартную обработку
+  end;
+
+  func Cell1OnClick(Cell :TemplateCell; Action :Template.ClickTypes) :Logical;
+    -- Обработка события нажатия в зависимости от типа
+    -- Параметры:
+    --   Cell: клетка шаблона
+    --   Action: тип нажатия (SingleClick, DoubleClick, EnterPressed, ButtonPressed)
+    var i:Integer;
+    var subvar: Variant[];
+      for i = 1..LengthOfArray(ТаблИмя) do
+        subvar[i] = Готов[i];
+      end;
+
+      i = SearchInArray(subvar, False);
+      if i > 0 then
+        Template.CurrentCell = Template.CellByField['Готов'];
+        Template.CurrentSection = secTables;
+        Template.Frame = i;
+      end;
+    Result = True; -- Разрешаем стандартную обработку
+  end;
+
+--}
+
+end

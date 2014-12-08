@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<Project Version="1">
+  <Options Caption="AutoOracle" Comment="Автоматизация подключения к внешней базе Oracle" Version="1.00" Author="Copyright © 2014 Scondo" Code="0" SubCode="0" WebCode="0" WebSubCode="0" Frontal="True"/>
+  <Usage>
+    <Project Name="СИС2"/>
+  </Usage>
+  <Groups>
+    <Group Name="Записи" Type="Documents" Disabled="False"/>
+    <Group Name="Бланки" Type="Blanks" Disabled="False"/>
+  </Groups>
+</Project>

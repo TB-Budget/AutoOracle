@@ -1,0 +1,15 @@
+﻿External Group "Metadata";
+  -- Список столбцов всех таблиц (служебное)
+  record ALL_TAB_COLS = "ALL_TAB_COLS"("INTERNAL_COLUMN_ID": Numeric);
+    Field QUALIFIED_COL_NAME :string;  -- Qualified column name
+    Field CHAR_LENGTH: Numeric;  -- Displays the length of the column in characters.
+    Field COLUMN_ID: Numeric;  -- Sequence number of the column as created
+    Field DATA_PRECISION: Numeric;  -- Decimal precision for NUMBER datatype; binary precision for FLOAT datatype, null for all other datatypes
+    Field DATA_LENGTH: Numeric;  -- Length of the column (in bytes)
+    Field DATA_TYPE: string;  -- Datatype of the column
+    Field DEFAULT_LENGTH: Numeric;  -- Length of default value for the column
+    Field COLUMN_NAME: string;  -- Column name
+    Field TABLE_NAME: string;  -- Name of the table, view, or cluster
+  end;
+
+end;
